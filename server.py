@@ -7,7 +7,7 @@ from pathlib import Path
 
 import torch
 import torchaudio
-import ffmpeg
+#import ffmpeg
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -116,85 +116,85 @@ async def clone_voice(
 # -------------------------------------------------------
 # 3) TRANSLATE FULL VIDEO → NEW LANGUAGE + CLONED VOICE
 # -------------------------------------------------------
-@app.post("/translate_video")
-async def translate_video(
-    video: UploadFile = File(...),
-    target_language: str = Form("spanish")
-):
-    try:
-        lang = SUPPORTED_LANGUAGES.get(target_language.lower(), "es")
+# @app.post("/translate_video")
+# async def translate_video(
+#     video: UploadFile = File(...),
+#     target_language: str = Form("spanish")
+# ):
+#     try:
+#         lang = SUPPORTED_LANGUAGES.get(target_language.lower(), "es")
 
-        # -------------------------
-        # Save uploaded video
-        # -------------------------
-        temp_video = DEBUG_DIR / f"in_{video.filename}"
-        temp_video.write_bytes(await video.read())
+#         # -------------------------
+#         # Save uploaded video
+#         # -------------------------
+#         temp_video = DEBUG_DIR / f"in_{video.filename}"
+#         temp_video.write_bytes(await video.read())
 
-        log.info(f"Uploaded video saved: {temp_video}")
+#         log.info(f"Uploaded video saved: {temp_video}")
 
-        # -------------------------
-        # Extract audio track
-        # -------------------------
-        audio_path = DEBUG_DIR / "extracted.wav"
-        (
-            ffmpeg
-            .input(str(temp_video))
-            .output(str(audio_path), ac=1, ar=44100)
-            .overwrite_output()
-            .run(quiet=True)
-        )
-        log.info(f"Audio extracted → {audio_path}")
+#         # -------------------------
+#         # Extract audio track
+#         # -------------------------
+#         audio_path = DEBUG_DIR / "extracted.wav"
+#         (
+#             ffmpeg
+#             .input(str(temp_video))
+#             .output(str(audio_path), ac=1, ar=44100)
+#             .overwrite_output()
+#             .run(quiet=True)
+#         )
+#         log.info(f"Audio extracted → {audio_path}")
 
-        # load audio
-        wav, sr = torchaudio.load(audio_path)
+#         # load audio
+#         wav, sr = torchaudio.load(audio_path)
 
-        # -------------------------
-        # 1️⃣ Transcribe original audio
-        # -------------------------
-        transcript = model.transcribe(wav.to(DEVICE))
-        original_text = transcript["text"]
-        log.info(f"Transcription: {original_text}")
+#         # -------------------------
+#         # 1️⃣ Transcribe original audio
+#         # -------------------------
+#         transcript = model.transcribe(wav.to(DEVICE))
+#         original_text = transcript["text"]
+#         log.info(f"Transcription: {original_text}")
 
-        # -------------------------
-        # 2️⃣ Translate text
-        # -------------------------
-        translated_text = model.translate(original_text, lang)
-        log.info(f"Translated text: {translated_text}")
+#         # -------------------------
+#         # 2️⃣ Translate text
+#         # -------------------------
+#         translated_text = model.translate(original_text, lang)
+#         log.info(f"Translated text: {translated_text}")
 
-        # -------------------------
-        # 3️⃣ Voice clone in target language
-        # -------------------------
-        cloned_audio = model.generate_speech(
-            text=translated_text,
-            voice=wav.to(DEVICE),     # cloned voice
-            language=lang,
-        )
+#         # -------------------------
+#         # 3️⃣ Voice clone in target language
+#         # -------------------------
+#         cloned_audio = model.generate_speech(
+#             text=translated_text,
+#             voice=wav.to(DEVICE),     # cloned voice
+#             language=lang,
+#         )
 
-        out_audio = DEBUG_DIR / "translated.wav"
-        torchaudio.save(str(out_audio), cloned_audio.unsqueeze(0).cpu(), 44100)
+#         out_audio = DEBUG_DIR / "translated.wav"
+#         torchaudio.save(str(out_audio), cloned_audio.unsqueeze(0).cpu(), 44100)
 
-        # -------------------------
-        # 4️⃣ Replace audio in video
-        # -------------------------
-        output_video = DEBUG_DIR / f"translated_{video.filename}"
+#         # -------------------------
+#         # 4️⃣ Replace audio in video
+#         # -------------------------
+#         output_video = DEBUG_DIR / f"translated_{video.filename}"
 
-        (
-            ffmpeg
-            .input(str(temp_video))
-            .video
-            .input(str(out_audio))
-            .output(str(output_video), vcodec="copy", acodec="aac")
-            .overwrite_output()
-            .run(quiet=True)
-        )
+#         (
+#             ffmpeg
+#             .input(str(temp_video))
+#             .video
+#             .input(str(out_audio))
+#             .output(str(output_video), vcodec="copy", acodec="aac")
+#             .overwrite_output()
+#             .run(quiet=True)
+#         )
 
-        log.info(f"FINAL VIDEO READY → {output_video}")
+#         log.info(f"FINAL VIDEO READY → {output_video}")
 
-        return FileResponse(output_video, media_type="video/mp4")
+#         return FileResponse(output_video, media_type="video/mp4")
 
-    except Exception as e:
-        log.exception("Video translation error")
-        raise HTTPException(500, str(e))
+#     except Exception as e:
+#         log.exception("Video translation error")
+#         raise HTTPException(500, str(e))
     
 # -------------------------------------------------------
 # 4) TRANSLATE AUDIO ONLY → RETURN NEW CLONED SPEECH
