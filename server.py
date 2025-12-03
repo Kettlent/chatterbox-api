@@ -3,7 +3,7 @@ import io
 import torch
 import torchaudio
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
@@ -21,86 +21,111 @@ else:
 
 print(f"[INFO] Using device: {DEVICE}")
 
+
 # -----------------------
-# LOAD MODEL ON STARTUP
+# LOAD MODEL ONCE AT STARTUP
 # -----------------------
 @app.on_event("startup")
 def load_model():
     global tts_multi
-    print("[INFO] Loading multilingual model...")
+    print("[INFO] Loading Chatterbox Multilingual model...")
     tts_multi = ChatterboxMultilingualTTS.from_pretrained(device=DEVICE)
     print("[INFO] Model loaded successfully.")
 
 
 # -----------------------
-# /tts_clone ENDPOINT
+#  /tts_clone : Text + Voice Sample → WAV
 # -----------------------
 @app.post("/tts_clone")
 async def tts_clone(
     text: str = Form(...),
-    target_language: str = Form(...),   # expects language codes: "es", "hi", "fr", etc.
+    target_language: str = Form(...),
     voice_sample: UploadFile = File(...)
 ):
     """
-    Generate WAV audio using:
-    - text prompt
-    - target language (language ID)
-    - reference voice sample for cloning
+    Takes:
+        - text prompt
+        - target language (e.g., "es", "hi", "fr")
+        - reference voice audio (wav/m4a/mp3)
+    Returns:
+        - Fully generated WAV file (voice cloned into that language)
     """
 
-    # Validate request
-    if voice_sample is None:
-        raise HTTPException(status_code=400, detail="voice_sample file missing.")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
-    # Save uploaded voice sample temporarily
+    if voice_sample is None:
+        raise HTTPException(status_code=400, detail="Missing voice_sample file.")
+
+
+    # -------------------------------------
+    # Save uploaded reference audio to temp
+    # -------------------------------------
     try:
         temp_path = f"/tmp/{voice_sample.filename}"
         with open(temp_path, "wb") as f:
             f.write(await voice_sample.read())
         print(f"[INFO] Saved voice sample → {temp_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save voice sample: {e}")
 
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save uploaded audio file: {e}"
+        )
+
+
+    # -------------------------------------
+    # Generate audio
+    # -------------------------------------
     try:
-        # Generate cloned speech
-        print(f"[INFO] Generating voice clone: lang={target_language}")
+        print(f"[INFO] Generating TTS → lang={target_language}")
 
         wav = tts_multi.generate(
             text,
             language_id=target_language,
             audio_prompt_path=temp_path
-        )
+        ).cpu()
 
-        # Convert to CPU tensor for saving
-        wav = wav.cpu()
+        # Ensure waveform is 2D: (channels, samples)
+        if wav.dim() == 1:
+            wav = wav.unsqueeze(0)
 
-        # Write to memory buffer as WAV
+        # Save to memory buffer (return full file)
         buffer = io.BytesIO()
-        torchaudio.save(buffer, wav.unsqueeze(0), tts_multi.sr, format="wav")
+        torchaudio.save(buffer, wav, tts_multi.sr, format="wav")
         buffer.seek(0)
 
         filename = f"tts_clone_{abs(hash(text))}.wav"
 
-        print("[INFO] Returning generated WAV")
+        print("[INFO] Returning full WAV file.")
 
-        return StreamingResponse(
-            buffer,
+        return Response(
+            content=buffer.read(),
             media_type="audio/wav",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
         )
 
     except Exception as e:
-        print("[ERROR] Generation failed:", str(e))
+        print("[ERROR] TTS generation failed:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Cleanup temp file
+        # Clean up temp file
         try:
             os.remove(temp_path)
         except:
             pass
 
 
+# -----------------------
+#  Health Check
+# -----------------------
 @app.get("/")
 def root():
-    return {"status": "Chatterbox API running", "device": DEVICE}
+    return {
+        "status": "Chatterbox API running",
+        "device": DEVICE,
+        "model": "Multilingual-TTS"
+    }
