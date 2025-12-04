@@ -52,7 +52,7 @@ echo "[INFO] Cache directories ready"
 # Start FastAPI server
 echo "[INFO] Launching server on port $PORT..."
 
-nohup uvicorn $APP_FILE:app \
+nohup uvicorn server:app \
     --host 0.0.0.0 \
     --port $PORT \
     --workers 1 \
