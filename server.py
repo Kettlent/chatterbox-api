@@ -9,6 +9,10 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
 app = FastAPI(title="Chatterbox Voice-Cloning API")
 
+
+
+
+
 # -----------------------
 # DEVICE SETUP
 # -----------------------
@@ -40,7 +44,9 @@ def load_model():
 async def tts_clone(
     text: str = Form(...),
     target_language: str = Form(...),
-    voice_sample: UploadFile = File(...)
+    voice_sample: UploadFile = File(...),
+    exaggeration: float = Form(0.5),
+    cfg_weight: float = Form(0.5)
 ):
     """
     Takes:
@@ -79,11 +85,12 @@ async def tts_clone(
     # -------------------------------------
     try:
         print(f"[INFO] Generating TTS → lang={target_language}")
-
         wav = tts_multi.generate(
-            text,
+            text=text,
             language_id=target_language,
-            audio_prompt_path=temp_path
+            audio_prompt_path=temp_path,
+            exaggeration=exaggeration,
+            cfg_weight=cfg_weight
         ).cpu()
 
         # Ensure waveform is 2D: (channels, samples)
