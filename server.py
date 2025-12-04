@@ -9,8 +9,12 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
 app = FastAPI(title="Chatterbox Voice-Cloning API")
 
-
-
+#uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+# curl -X POST https://YOUR_POD/tts_clone \
+#   -F text="Hola, ¿cómo estás? Este es el modelo de voz multilingüe…" \
+#   -F target_language="es" \
+#   -F voice_sample=@/path/sample.wav \
+#   --output result.wav
 
 
 # -----------------------
